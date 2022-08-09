@@ -1,135 +1,163 @@
-const express = require('express')
-const expressGraphQL = require('express-graphql')
+const express = require("express");
+const app = express();
+const expressGraphQL = require("express-graphql");
 const {
+  GraphQLString,
+  GraphQLInt,
+  GraphQLList,
   GraphQLSchema,
   GraphQLObjectType,
-  GraphQLString,
-  GraphQLList,
-  GraphQLInt,
-  GraphQLNonNull
-} = require('graphql')
-const app = express()
+} = require("graphql");
+const { shops, items } = require("./data.js");
 
-const authors = [
-	{ id: 1, name: 'J. K. Rowling' },
-	{ id: 2, name: 'J. R. R. Tolkien' },
-	{ id: 3, name: 'Brent Weeks' }
-]
-
-const books = [
-	{ id: 1, name: 'Harry Potter and the Chamber of Secrets', authorId: 1 },
-	{ id: 2, name: 'Harry Potter and the Prisoner of Azkaban', authorId: 1 },
-	{ id: 3, name: 'Harry Potter and the Goblet of Fire', authorId: 1 },
-	{ id: 4, name: 'The Fellowship of the Ring', authorId: 2 },
-	{ id: 5, name: 'The Two Towers', authorId: 2 },
-	{ id: 6, name: 'The Return of the King', authorId: 2 },
-	{ id: 7, name: 'The Way of Shadows', authorId: 3 },
-	{ id: 8, name: 'Beyond the Shadows', authorId: 3 }
-]
-
-const BookType = new GraphQLObjectType({
-  name: 'Book',
-  description: 'This represents a book written by an author',
+const shopType = new GraphQLObjectType({
+  name: "Shop",
   fields: () => ({
-    id: { type: GraphQLNonNull(GraphQLInt) },
-    name: { type: GraphQLNonNull(GraphQLString) },
-    authorId: { type: GraphQLNonNull(GraphQLInt) },
-    author: {
-      type: AuthorType,
-      resolve: (book) => {
-        return authors.find(author => author.id === book.authorId)
-      }
-    }
-  })
-})
+    id: { type: GraphQLInt },
+    name: { type: GraphQLString },
+    items: {
+      type: new GraphQLList(itemType),
+      resolve(parent, args) {
+        return items.filter((item) => item.shops.some(shop => shop.id === parent.id));
+      },
+    },
+  }),
+});
 
-const AuthorType = new GraphQLObjectType({
-  name: 'Author',
-  description: 'This represents a author of a book',
+const itemType = new GraphQLObjectType({
+  name: "Item",
   fields: () => ({
-    id: { type: GraphQLNonNull(GraphQLInt) },
-    name: { type: GraphQLNonNull(GraphQLString) },
-    books: {
-      type: new GraphQLList(BookType),
-      resolve: (author) => {
-        return books.filter(book => book.authorId === author.id)
-      }
-    }
-  })
-})
+    id: { type: GraphQLInt },
+    name: { type: GraphQLString },
+    price: { type: GraphQLInt },
+    shops: {
+      type: new GraphQLList(shopType),
+      resolve(parent, args) {
+        return shops.filter((shop) => shop.items.some(item => item.id === parent.id));
+      },
+    },
+  }),
+});
 
 const RootQueryType = new GraphQLObjectType({
-  name: 'Query',
-  description: 'Root Query',
+  name: "Query",
   fields: () => ({
-    book: {
-      type: BookType,
-      description: 'A Single Book',
-      args: {
-        id: { type: GraphQLInt }
+    shops: {
+      type: new GraphQLList(shopType),
+      resolve: (parent, args) => {
+        return shops;
       },
-      resolve: (parent, args) => books.find(book => book.id === args.id)
     },
-    books: {
-      type: new GraphQLList(BookType),
-      description: 'List of All Books',
-      resolve: () => books
-    },
-    authors: {
-      type: new GraphQLList(AuthorType),
-      description: 'List of All Authors',
-      resolve: () => authors
-    },
-    author: {
-      type: AuthorType,
-      description: 'A Single Author',
-      args: {
-        id: { type: GraphQLInt }
+    items: {
+      type: new GraphQLList(itemType),
+      resolve: (parent, args) => {
+        return items;
       },
-      resolve: (parent, args) => authors.find(author => author.id === args.id)
-    }
-  })
-})
+    },
+    selectShops: {
+      type: new GraphQLList(shopType),
+      args: {
+        limit: { type: GraphQLInt },
+      },
+      resolve: (parent, args) => {
+        return shops.slice(0, args.limit);
+      },
+    },
+    selectItems: {
+      type: new GraphQLList(itemType),
+      args: {
+        limit: { type: GraphQLInt },
+      },
+      resolve: (parent, args) => {
+        return items.slice(0, args.limit);
+      },
+    },
+  }),
+});
 
 const RootMutationType = new GraphQLObjectType({
-  name: 'Mutation',
-  description: 'Root Mutation',
+  name: "Mutation",
   fields: () => ({
-    addBook: {
-      type: BookType,
-      description: 'Add a book',
+    addShop: {
+      type: shopType,
       args: {
-        name: { type: GraphQLNonNull(GraphQLString) },
-        authorId: { type: GraphQLNonNull(GraphQLInt) }
+        name: { type: GraphQLString },
       },
       resolve: (parent, args) => {
-        const book = { id: books.length + 1, name: args.name, authorId: args.authorId }
-        books.push(book)
-        return book
-      }
+        const shop = {
+          id: shops.length + 1,
+          name: args.name,
+          items: [],
+        };
+        shops.push(shop);
+        return shop;
+      },
     },
-    addAuthor: {
-      type: AuthorType,
-      description: 'Add an author',
+    addItem: {
+      type: itemType,
       args: {
-        name: { type: GraphQLNonNull(GraphQLString) }
+        name: { type: GraphQLString },
+        price: { type: GraphQLInt },
       },
       resolve: (parent, args) => {
-        const author = { id: authors.length + 1, name: args.name }
-        authors.push(author)
-        return author
-      }
-    }
-  })
-})
+        const item = {
+          id: items.length + 1,
+          name: args.name,
+          price: args.price,
+          shops: [],
+        };
+        items.push(item);
+        return item;
+      },
+    },
+    addItemsToShop: {
+      type: shopType,
+      args: {
+        shopId: { type: GraphQLInt },
+        itemIds: { type: new GraphQLList(GraphQLInt) },
+      },
+      resolve: (parent, args) => {
+        const shop = shops.find((shop) => shop.id === args.shopId);
+        args.itemIds.forEach((itemId) => {
+          const item = items.find((item) => item.id === itemId);
+          shop.items.push(item);
+          item.shops.push(shop);
+        });
+        return shop;
+      },
+    },
+    addShopsToItem: {
+      type: itemType,
+      args: {
+        itemId: { type: GraphQLInt },
+        shopIds: { type: new GraphQLList(GraphQLInt) },
+      },
+      resolve: (parent, args) => {
+        const item = items.find((item) => item.id === args.itemId);
+        args.shopIds.forEach((shopId) => {
+          const shop = shops.find((shop) => shop.id === shopId);
+          item.shops.push(shop);
+          shop.items.push(item);
+        });
+        return item;
+      },
+    },
+  }),
+});
 
 const schema = new GraphQLSchema({
   query: RootQueryType,
-  mutation: RootMutationType
-})
+  mutation: RootMutationType,
+});
 
-app.use('/graphql', expressGraphQL({
-  schema: schema,
-  graphiql: true
-}))
-app.listen(5000, () => console.log('Server Running'))
+app.use(
+  "/graphql",
+  expressGraphQL({
+    schema: schema,
+    graphiql: true,
+  })
+);
+
+app.listen(5000, () => {
+  console.log("Example app listening on port 5000!");
+});
