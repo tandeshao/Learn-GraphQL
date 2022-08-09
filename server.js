@@ -1,6 +1,7 @@
 const express = require("express");
 const app = express();
 const expressGraphQL = require("express-graphql");
+const cors = require('cors');
 const {
   GraphQLString,
   GraphQLInt,
@@ -149,6 +150,8 @@ const schema = new GraphQLSchema({
   query: RootQueryType,
   mutation: RootMutationType,
 });
+
+app.use(cors({ origin: true }))
 
 app.use(
   "/graphql",
